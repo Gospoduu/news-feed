@@ -10,6 +10,7 @@ from src.infra.db_engine import engine, init_db
 from src.infra.redis.start_redis import redis_client
 from src.interfaces.routers.counterparties import router as counterparties_router
 from src.interfaces.routers.insights import router as insights_router
+from src.interfaces.routers.news import router as news_router
 from src.interfaces.streams import analysis as _analysis  # Registers subscriber.
 from src.interfaces.streams import news as _news  # Registers subscriber.
 from src.interfaces.streams.broker import broker
@@ -45,3 +46,4 @@ app.add_middleware(
 )
 app.include_router(counterparties_router)
 app.include_router(insights_router)
+app.include_router(news_router)
