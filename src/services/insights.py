@@ -72,8 +72,11 @@ class InsightsService:
         company_id = event.get("company_id")
         if not isinstance(company_id, str) or not company_id.strip():
             raise InvalidInsightEvent("company_id must be a non-empty string")
+        # The insight agent assigns its own event_id to the completed insight
+        # and echoes our request ID in request_event_id.
+        request_event_id = event.get("request_event_id", event.get("event_id"))
         try:
-            event_id = str(UUID(str(event["event_id"])))
+            event_id = str(UUID(str(request_event_id)))
         except (KeyError, ValueError) as error:
             raise InvalidInsightEvent("event_id must be a UUID") from error
         if "insight" not in event:

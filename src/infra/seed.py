@@ -23,7 +23,9 @@ PROFILE_FILE = DATA_DIRECTORY / "df_Uid_data_hack.csv"
 LINK_FILE = DATA_DIRECTORY / "df_Fid_Uid_link_hack.csv"
 PAYMENT_FILE = DATA_DIRECTORY / "df_Uid_payment_hack.csv"
 BATCH_SIZE = 5_000
-PROFILE_BATCH_SIZE = 2_000
+# asyncpg limits one statement to 32,767 bind parameters; profiles have 25
+# columns, so batches must stay below 1,310 rows.
+PROFILE_BATCH_SIZE = 1_000
 
 
 def _csv_rows(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
@@ -179,8 +181,7 @@ async def seed_database(connection: AsyncConnection) -> None:
         ["uid"],
         update_existing=False,
     )
-    # A profile has 25 fields; 2,000 rows stay below PostgreSQL's 65,535
-    # bind-parameter limit for a multi-value INSERT.
+    # Keep the multi-value INSERT below asyncpg's 32,767 bind-parameter limit.
     await _upsert(
         connection,
         company_profiles,
