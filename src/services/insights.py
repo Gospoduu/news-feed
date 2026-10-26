@@ -13,6 +13,7 @@ from src.infra.redis.insights import InsightCache
 PublishInsight = Callable[..., Awaitable[None]]
 REQUEST_EVENT_TYPE = "insight.requested"
 RESPONSE_EVENT_TYPE = "insight.completed"
+FAILURE_EVENT_TYPE = "insight.failed"
 
 
 class InvalidInsightEvent(ValueError):
@@ -38,6 +39,8 @@ class InsightsService:
         state = await self._cache.get(company_id)
         if state is not None:
             if state.get("status") == "ready" and isinstance(state.get("response"), dict):
+                return InsightLookup(processing=False, response=state["response"])
+            if state.get("status") == "failed" and isinstance(state.get("response"), dict):
                 return InsightLookup(processing=False, response=state["response"])
             return InsightLookup(processing=True)
 
@@ -67,7 +70,8 @@ class InsightsService:
 
     async def save_response(self, event: Mapping[str, Any]) -> bool:
         """Cache a valid response from the analytics service for its requester."""
-        if event.get("event_type") != RESPONSE_EVENT_TYPE or event.get("schema_version") != 1:
+        event_type = event.get("event_type")
+        if event_type not in {RESPONSE_EVENT_TYPE, FAILURE_EVENT_TYPE} or event.get("schema_version") != 1:
             raise InvalidInsightEvent("unsupported insight response event")
         company_id = event.get("company_id")
         if not isinstance(company_id, str) or not company_id.strip():
@@ -79,11 +83,15 @@ class InsightsService:
             event_id = str(UUID(str(request_event_id)))
         except (KeyError, ValueError) as error:
             raise InvalidInsightEvent("event_id must be a UUID") from error
-        if "insight" not in event:
+        failed = event_type == FAILURE_EVENT_TYPE
+        if failed and not isinstance(event.get("error"), str):
+            raise InvalidInsightEvent("failed insight response must contain an error")
+        if not failed and "insight" not in event:
             raise InvalidInsightEvent("insight response must contain insight")
 
         return await self._cache.store_response(
             company_id.strip(),
             event_id,
             dict(event),
+            status="failed" if failed else "ready",
         )

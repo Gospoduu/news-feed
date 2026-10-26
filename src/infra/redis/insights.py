@@ -45,6 +45,8 @@ class InsightCache:
         company_id: str,
         event_id: str,
         response: dict[str, Any],
+        *,
+        status: str = "ready",
     ) -> bool:
         """Store a response only for the still-active request of this company."""
         state = await self.get(company_id)
@@ -60,7 +62,7 @@ class InsightCache:
             self.key(company_id),
             json.dumps(
                 {
-                    "status": "ready",
+                    "status": status,
                     "event_id": event_id,
                     "response": response,
                 }

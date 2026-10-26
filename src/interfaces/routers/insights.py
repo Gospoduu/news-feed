@@ -22,4 +22,9 @@ async def get_company_insight(company_id: str):
             status_code=status.HTTP_202_ACCEPTED,
             content={"status": "processing", "company_id": company_id},
         )
+    if result.response and result.response.get("event_type") == "insight.failed":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=result.response.get("error", "Не удалось создать инсайт для этой компании."),
+        )
     return result.response

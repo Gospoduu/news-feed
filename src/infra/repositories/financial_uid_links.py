@@ -52,6 +52,7 @@ class FinancialUidLinksRepository(BaseRepository):
                 financial_uid_links.c.uid.label("company_uid"),
                 financial_uid_links.c.city_name,
                 financial_uid_links.c.rc_name,
+                company_profiles.c.id.is_not(None).label("profile_available"),
                 company_profiles,
             )
             .select_from(
