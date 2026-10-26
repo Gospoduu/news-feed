@@ -1,63 +1,50 @@
-# infra/redis/safe.py
+"""Small retry-aware wrappers around the Redis commands used by this service."""
 
 import asyncio
 from logging import getLogger
 from typing import Any, Mapping
+
 from redis.asyncio import Redis
-from Back.core.exc import RetryableError
-from .exc import _REDIS_RETRYABLE
+
+from src.infra.redis.exc import RetryableRedisError, _REDIS_RETRYABLE
+
 
 logger = getLogger(__name__)
 
 
-async def xadd_safe(
+async def _call(operation: str, context: Mapping[str, Any], command):
+    try:
+        return await command()
+    except asyncio.CancelledError:
+        raise
+    except _REDIS_RETRYABLE as error:
+        logger.exception("Redis %s failed", operation, extra=dict(context))
+        raise RetryableRedisError(f"Redis {operation} failed: {error!r}") from error
+
+
+async def get_safe(redis: Redis, key: str) -> str | None:
+    return await _call("GET", {"key": key}, lambda: redis.get(key))
+
+
+async def set_safe(
     redis: Redis,
     key: str,
-    fields: Mapping[str, Any],
-    maxlen: int | None = None,
-):
-    try:
-        return await redis.xadd(key, fields, maxlen=maxlen)
-    except asyncio.CancelledError:
-        logger.warning("xadd_safe cancelled. key: %s", key)
-        raise
-    except _REDIS_RETRYABLE as e:
-        logger.exception("Redis xadd failed",extra={"key": key})
-        raise RetryableError(f"Redis xadd failed: {e!r}") from e
+    value: str,
+    *,
+    ex: int,
+    nx: bool = False,
+) -> bool:
+    result = await _call(
+        "SET",
+        {"key": key},
+        lambda: redis.set(key, value, ex=ex, nx=nx),
+    )
+    return bool(result)
 
 
-
-async def xread_safe(
-    redis: Redis,
-    streams: Mapping[str, str],
-    block: int | None = None,
-    count: int | None = None
-):
-    try:
-        return await redis.xread(streams=streams, block=block, count=count)
-    except asyncio.CancelledError:
-        logger.warning("xread_safe cancelled. streams: %s", streams)
-        raise
-    except _REDIS_RETRYABLE as e:
-        logger.exception("Redis xread failed", extra={"streams": streams, "error": str(e)})
-        raise RetryableError(f"Redis xread failed: {e!r}") from e
+async def delete_safe(redis: Redis, key: str) -> int:
+    return await _call("DEL", {"key": key}, lambda: redis.delete(key))
 
 
-async def xrange_safe(
-    redis: Redis,
-    key: str,
-    min: str,
-    max: str = "+",
-    count: int | None = None
-):
-    try:
-        return await redis.xrange(key, min=min, max=max, count=count)
-    except asyncio.CancelledError:
-        logger.warning("xrange_safe cancelled. key: %s", key)
-        raise
-    except _REDIS_RETRYABLE as e:
-        logger.exception("Redis xrange failed", extra={"key": key})
-        raise RetryableError(f"Redis xrange failed: {e!r}") from e
-    except Exception:
-        logger.exception("Redis xrange failed", extra={"key": key})
-        raise
+async def ttl_safe(redis: Redis, key: str) -> int:
+    return await _call("TTL", {"key": key}, lambda: redis.ttl(key))

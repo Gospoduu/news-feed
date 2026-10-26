@@ -9,3 +9,7 @@ _REDIS_RETRYABLE = (
     RedisTimeoutError,
     BusyLoadingError,
 )
+
+
+class RetryableRedisError(RuntimeError):
+    """A transient Redis failure that should make the message/request retry."""

@@ -1,0 +1,6 @@
+SQLAlchemy[asyncio]>=2.0,<2.2
+asyncpg>=0.29,<1
+faststream[kafka]>=0.5,<1
+fastapi>=0.110,<1
+redis>=5,<9
+uvicorn>=0.30,<1
